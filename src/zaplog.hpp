@@ -18,6 +18,7 @@
 #define ZAPLOG_API
 #endif
 
+#include <string>
 namespace zaplog {
 
 class ZAPLOG_API Zaplog
@@ -25,6 +26,9 @@ class ZAPLOG_API Zaplog
   public:
     Zaplog();
     int get_number() const;
+    std::string get_version() const;
+    std::string get_git_hash() const;
+    std::string get_git_date() const;
 
   private:
     int number;

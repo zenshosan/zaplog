@@ -1,9 +1,41 @@
 
+
+conf_data = configuration_data()
+conf_data.set('version', meson.project_version())
+config_h = configure_file(
+  input : 'zaplog_config.h.in',
+  output : 'zaplog_config.h',
+  configuration : conf_data
+)
+
+git_hash_h = vcs_tag(
+  command : ['git', 'show', '--format=%h'],
+  input : 'git_hash.h.in',
+  output :'git_hash.h',
+  fallback : ' ',
+  replace_string : '@git_hash@'
+)
+
+git_date_h = vcs_tag(
+  command : ['git', 'log', '-1', '--format=%cI'],
+  input : 'git_date.h.in',
+  output :'git_date.h',
+  fallback : ' ',
+  replace_string : '@git_date@'
+)
+
 lib_args = ['-DZAPLOG_BUILDING', '-DZAPLOG_BUILDING_SLIB']
+
+slib_sources = [
+  config_h,
+  git_hash_h,
+  git_date_h,
+  'zaplog.cpp'
+]
 
 slib = static_library(
   'zaplog',
-  sources : ['zaplog.cpp'],
+  sources : slib_sources,
   install : true,
   cpp_args : lib_args,
 )
