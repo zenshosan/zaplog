@@ -1,0 +1,106 @@
+name: Built & Unit Test
+
+on:
+  push:
+    branches: [ "main", "br_*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        build_type: [debugoptimized]
+        c_compiler: [gcc, clang, cl]
+        include:
+          - os: windows-latest
+            c_compiler: cl
+            cpp_compiler: cl
+          - os: ubuntu-latest
+            c_compiler: gcc
+            cpp_compiler: g++
+          - os: ubuntu-latest
+            c_compiler: clang
+            cpp_compiler: clang++
+        exclude:
+          - os: windows-latest
+            c_compiler: gcc
+          - os: windows-latest
+            c_compiler: clang
+          - os: ubuntu-latest
+            c_compiler: cl
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Prepare msbuild
+      if: contains(matrix.os, 'windows-latest')
+      uses: microsoft/setup-msbuild@v2
+      with:
+        msbuild-architecture: x64
+
+    - name: Install Python Dependencies
+      run: pip install meson ninja
+
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      run: |
+        echo "builddir=${{ github.workspace }}/builddir" >> "$GITHUB_OUTPUT"
+        echo "builddir_pkg=${{ github.workspace }}/builddir_pkg" >> "$GITHUB_OUTPUT"
+        echo "installdir=_tmp_installdir" >> "$GITHUB_OUTPUT"
+        echo "installdir_abs=${{ github.workspace }}/_tmp_installdir" >> "$GITHUB_OUTPUT"
+        echo "package_test=${{ github.workspace }}/package_test" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare Build for Windows
+      if: contains(matrix.os, 'windows-latest')
+      run: >
+        meson setup
+        --buildtype=${{ matrix.build_type }}
+        --prefix='${{ steps.strings.outputs.installdir_abs }}'
+        ${{ steps.strings.outputs.builddir }} ${{ github.workspace }}
+
+    - name: Prepare Build
+      if: ${{ !contains(matrix.os, 'windows-latest') }}
+      run: >
+        meson setup
+        --buildtype=${{ matrix.build_type }}
+        --prefix='${{ steps.strings.outputs.installdir_abs }}'
+        ${{ steps.strings.outputs.builddir }} ${{ github.workspace }}
+      env:
+        CC: ${{ matrix.c_compiler }}
+        CXX: ${{ matrix.cpp_compiler }}
+
+    - name: Run Build
+      run: meson compile -v -C ${{ steps.strings.outputs.builddir }}
+
+    - name: Run Test Suite
+      run: meson test -v -C ${{ steps.strings.outputs.builddir }}
+
+#    - name: Install package
+#      run: meson install -C ${{ steps.strings.outputs.builddir }}
+#
+#    - name: Package Test for Windows
+#      if: contains(matrix.os, 'windows-latest')
+#      run: |
+#        meson setup --buildtype=${{ matrix.build_type }} '-Dpackage_install_dir=${{ steps.strings.outputs.installdir }}' ${{ steps.strings.outputs.builddir_pkg }} ${{ steps.strings.outputs.package_test }}
+#        meson compile -v -C ${{ steps.strings.outputs.builddir_pkg }}
+#        meson test -v -C ${{ steps.strings.outputs.builddir_pkg }}
+#
+#    - name: Package Test
+#      if: ${{ !contains(matrix.os, 'windows-latest') }}
+#      run: |
+#        meson setup --buildtype ${{ matrix.build_type }} '-Dpackage_install_dir=${{ steps.strings.outputs.installdir }}' ${{ steps.strings.outputs.builddir_pkg }} ${{ steps.strings.outputs.package_test }} --pkg-config-path '${{ steps.strings.outputs.installdir }}/lib/x86_64-linux-gnu/pkgconfig'
+#        meson compile -v -C ${{ steps.strings.outputs.builddir_pkg }}
+#        meson test -v -C ${{ steps.strings.outputs.builddir_pkg }}
+#      env:
+#        CC: ${{ matrix.c_compiler }}
+#        CXX: ${{ matrix.cpp_compiler }}
