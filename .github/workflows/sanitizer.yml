@@ -1,0 +1,63 @@
+name: Sanitize
+
+on:
+  push:
+    branches: [ "xxx" ]
+#    branches: [ "br_*" ]
+#  pull_request:
+#    branches: [ "main" ]
+
+jobs:
+  sanitize:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        build_type: [debugoptimized]
+        c_compiler: [gcc]
+        sanitize: [address, undefined, thread, leak]
+        include:
+          - c_compiler: gcc
+            cpp_compiler: g++
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install Python Dependencies
+      run: pip install meson ninja
+
+    - name: Set reusable strings
+      id: strings
+      shell: bash
+      run: |
+        echo "builddir=${{ github.workspace }}/builddir" >> "$GITHUB_OUTPUT"
+        echo "result_file=sanitize_${{ matrix.sanitize }}.txt" >> "$GITHUB_OUTPUT"
+
+    - name: Prepare Build
+      if: ${{ !contains(matrix.os, 'windows-latest') }}
+      run: >
+        meson setup
+        --buildtype=${{ matrix.build_type }}
+        -Db_sanitize=${{ matrix.sanitize }}
+        ${{ steps.strings.outputs.builddir }} ${{ github.workspace }}
+      env:
+        CC: ${{ matrix.c_compiler }}
+        CXX: ${{ matrix.cpp_compiler }}
+
+    - name: Run Build
+      run: meson compile -v -C ${{ steps.strings.outputs.builddir }}
+
+    - name: Run Test Suite
+      run: meson test -v -C ${{ steps.strings.outputs.builddir }} 2>&1 | tee ${{ steps.strings.outputs.result_file }}
+
+    #- name: Upload results
+    #  uses: actions/upload-artifact@v4
+    #  with:
+    #    name: sanitize-results-${{ matrix.sanitize }}
+    #    path: ${{ steps.strings.outputs.result_file }}
+    #    overwrite: true

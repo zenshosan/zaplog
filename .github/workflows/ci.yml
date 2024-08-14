@@ -14,25 +14,28 @@ jobs:
       fail-fast: false
 
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        # as of 2024-08-15
+        os: [ubuntu-24.04, windows-2022]
+        #os: [ubuntu-latest, windows-latest]
         build_type: [debugoptimized]
-        c_compiler: [gcc, clang, cl]
+        # 'std::hardware_destructive_interference_size' is fully supported since clang-19
+        c_compiler: [gcc-13, clang-18, cl]
         include:
-          - os: windows-latest
+          - os: windows-2022
             c_compiler: cl
             cpp_compiler: cl
-          - os: ubuntu-latest
-            c_compiler: gcc
-            cpp_compiler: g++
-          - os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
+          - os: ubuntu-24.04
+            c_compiler: gcc-13
+            cpp_compiler: g++-13
+          - os: ubuntu-24.04
+            c_compiler: clang-18
+            cpp_compiler: clang++-18
         exclude:
-          - os: windows-latest
-            c_compiler: gcc
-          - os: windows-latest
-            c_compiler: clang
-          - os: ubuntu-latest
+          - os: windows-2022
+            c_compiler: gcc-13
+          - os: windows-2022
+            c_compiler: clang-18
+          - os: ubuntu-24.04
             c_compiler: cl
 
     steps:
@@ -42,13 +45,23 @@ jobs:
         python-version: '3.x'
 
     - name: Prepare msbuild
-      if: contains(matrix.os, 'windows-latest')
+      if: contains(matrix.os, 'windows')
       uses: microsoft/setup-msbuild@v2
       with:
         msbuild-architecture: x64
 
     - name: Install Python Dependencies
       run: pip install meson ninja
+
+    - name: Compiler version
+      if: ${{ !contains(matrix.os, 'windows') }}
+      run: |
+        dpkg -l | grep gcc
+        gcc --version
+        dpkg -l | grep g++
+        g++ --version
+        dpkg -l | grep clang
+        clang --version
 
     - name: Set reusable strings
       id: strings
@@ -61,15 +74,19 @@ jobs:
         echo "package_test=${{ github.workspace }}/package_test" >> "$GITHUB_OUTPUT"
 
     - name: Prepare Build for Windows
-      if: contains(matrix.os, 'windows-latest')
+      if: contains(matrix.os, 'windows')
       run: >
         meson setup
         --buildtype=${{ matrix.build_type }}
         --prefix='${{ steps.strings.outputs.installdir_abs }}'
+        --backend=vs
         ${{ steps.strings.outputs.builddir }} ${{ github.workspace }}
+      env:
+        CC: ${{ matrix.c_compiler }}
+        CXX: ${{ matrix.cpp_compiler }}
 
     - name: Prepare Build
-      if: ${{ !contains(matrix.os, 'windows-latest') }}
+      if: ${{ !contains(matrix.os, 'windows') }}
       run: >
         meson setup
         --buildtype=${{ matrix.build_type }}
@@ -89,14 +106,14 @@ jobs:
 #      run: meson install -C ${{ steps.strings.outputs.builddir }}
 #
 #    - name: Package Test for Windows
-#      if: contains(matrix.os, 'windows-latest')
+#      if: contains(matrix.os, 'windows')
 #      run: |
 #        meson setup --buildtype=${{ matrix.build_type }} '-Dpackage_install_dir=${{ steps.strings.outputs.installdir }}' ${{ steps.strings.outputs.builddir_pkg }} ${{ steps.strings.outputs.package_test }}
 #        meson compile -v -C ${{ steps.strings.outputs.builddir_pkg }}
 #        meson test -v -C ${{ steps.strings.outputs.builddir_pkg }}
 #
 #    - name: Package Test
-#      if: ${{ !contains(matrix.os, 'windows-latest') }}
+#      if: ${{ !contains(matrix.os, 'windows') }}
 #      run: |
 #        meson setup --buildtype ${{ matrix.build_type }} '-Dpackage_install_dir=${{ steps.strings.outputs.installdir }}' ${{ steps.strings.outputs.builddir_pkg }} ${{ steps.strings.outputs.package_test }} --pkg-config-path '${{ steps.strings.outputs.installdir }}/lib/x86_64-linux-gnu/pkgconfig'
 #        meson compile -v -C ${{ steps.strings.outputs.builddir_pkg }}

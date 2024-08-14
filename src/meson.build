@@ -24,13 +24,22 @@ git_date_h = vcs_tag(
   replace_string : '@git_date@'
 )
 
-lib_args = ['-DZAPLOG_BUILDING', '-DZAPLOG_BUILDING_SLIB']
+message('**meson compiler id**:', meson.get_compiler('cpp').get_id())
 
+if meson.get_compiler('cpp').get_id() == 'msvc'
+  extra_args = ['/utf-8']
+elif meson.get_compiler('cpp').get_id() == 'gcc'
+  extra_args = ['-Wno-unused-variable', '-Wno-interference-size']
+else
+  extra_args = ['-Wno-unused-variable']
+endif
+
+lib_args = ['-DZAPLOG_BUILDING', '-DZAPLOG_BUILDING_SLIB'] + extra_args
 slib_sources = [
   config_h,
   git_hash_h,
   git_date_h,
-  'zaplog.cpp'
+  'zaplog.cpp',
 ]
 
 slib = static_library(
@@ -43,14 +52,33 @@ slib = static_library(
 gtest_dep = dependency('gtest', required : true)
 gtest_main_dep = dependency('gtest_main', required : true)
 
-test_args = ['-DZAPLOG_BUILDING', '-DZAPLOG_BUILDING_SLIB']
-test_exe = executable(
-  'zaplog_test',
+
+unit_test_args = ['-DZAPLOG_BUILDING', '-DZAPLOG_BUILDING_SLIB', '-DLIBPT_ENABLE_BUILD_TESTS'] + extra_args
+unit_test_sources = [
+  'pt/pf_bounded_spsc_zero_copy_test.cpp',
+  'pt/pf_mpsc_ringbuffer_test.cpp'
+]
+unit_test_exe = executable(
+  'unit_test',
+  sources : unit_test_sources,
+  dependencies : [ gtest_dep, gtest_main_dep, ],
+  cpp_args : unit_test_args
+)
+test('unittest', unit_test_exe)
+
+
+api_test_args = ['-DZAPLOG_BUILDING', '-DZAPLOG_BUILDING_SLIB' ] + extra_args
+api_test_sources = [
   'zaplog_test.cpp',
+]
+api_test_exe = executable(
+  'api_test',
+  sources : api_test_sources,
   dependencies : [ gtest_dep, gtest_main_dep, ],
   link_with : slib,
-  cpp_args : test_args)
-test('zaplog', test_exe)
+  cpp_args : api_test_args)
+test('apitest', api_test_exe)
+
 
 # Make this library usable as a Meson subproject.
 zaplog_dep = declare_dependency(
@@ -65,8 +93,8 @@ pkg_mod = import('pkgconfig')
 pkg_mod.generate(
   name : 'zaplog',
   filebase : 'zaplog',
-  description : 'Meson sample project.',
+  description : 'Zaplog: A C++ logging library.',
   subdirs : 'zaplog',
   libraries : slib,
-  version : '0.1',
+  version : meson.project_version(),
 )

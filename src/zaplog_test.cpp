@@ -1,3 +1,7 @@
+/* Copyright (c) 2024 Masaaki Hamada
+ * Distributed under the MIT License (http://opensource.org/licenses/MIT)
+ */
+
 #include <iostream>
 #include <zaplog.hpp>
 
